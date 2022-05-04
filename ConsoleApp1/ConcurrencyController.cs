@@ -1,8 +1,25 @@
+// Какая-то странная смесь семафора и барьера.
+// Проблема: необходимо ограничивать число потоков, выполняющих работу до N, где N - переменное число, меняющееся прямо в рантайме.
+// Стандартный семафор способен обеспечить только константный уровень параллелизма, операции "приостановить часть работающих потоков" - нет.
+// Пример использования:
+// В воркерах: while(true) { _controller.Pass(); ...work } 
+// Альтернативно-экзотически: while(true) { _controller.Pass(); ...work; _controller.Pass(); ...work; ...etc }, 
+// тогда каждый вызов Pass будет своеобразным breakpoint'ом, на котором поток в любой момент сможет остановиться.
+// То есть потоки могуть встать посередине операции, но при этом число потоков выполняющих блоки между Pass() всегда будет стремиться к N.
+// В тредах, желающих ограничить уровень параллелизма в воркерах: просто _controller.SetTargetDegreeOfParallelism(N);
+
+// TODO: метод Exit(), позволяющий потоку выйти из контроллера (пометить себя неактивным), не заблокировавшись.
+// while(!completed) { _controller.Pass(); ...work } _controller.Exit();
+
+// Завязан на ThreadLocal, нельзя допускать смены потока.
+// lock-free гарантии в тех случаях, когда N >= числа потоков в критической секции
+
 internal class ConcurrencyController
 {
     private readonly SemaphoreSlim _semaphore = new(0, int.MaxValue);
     private readonly object _targetDopLock = new();
     
+    // Возможная оптимизация: упаковать в один long
     private volatile State _currentState;
     
     public ConcurrencyController(int initialTargetDegreeOfParallelism)
